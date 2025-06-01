@@ -20,6 +20,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "driver/ledc.h"
+// #include "esp_cpu.h"
 
 #include "Config.h"
 
@@ -36,8 +37,8 @@
 #endif  // !CONFIG_IDF_TARGET_LINUX
 
 #define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
-#define LED_1CH_PIN 13
-#define LED_2CH_PIN 12
+#define LED_1CH_PIN (14)
+#define LED_2CH_PIN (12)
 
 
 /* A simple example that demonstrates how to create GET and POST
@@ -48,7 +49,7 @@ static const char *TAG = "example";
 
 typedef enum ledMode_e
 {
-    ALL_TIME = 1,
+    ALLTIME = 1,
     FADE,
     FADE_ALTERNATELY,
     HALF_FADE_ALTERNATELY,
@@ -63,11 +64,14 @@ typedef struct device_status_s {
 
 } device_status_t;
 
-device_status_t device = {0, 100, 1}; // Начальное состояние лампы
+static device_status_t device = {0, 100, 1, 1023, 1023}; // Начальное состояние лампы
 
 void Init()
-{
-       ledc_timer_config_t ledc_timer = {
+{   
+    // gpio_reset_pin(LED_1CH_PIN);
+    // gpio_reset_pin(LED_2CH_PIN);
+
+    ledc_timer_config_t ledc_timer = {
         .speed_mode       = LEDC_HIGH_SPEED_MODE,
         .timer_num        = LEDC_TIMER_0,
         .duty_resolution  = LEDC_TIMER_10_BIT,
@@ -77,7 +81,7 @@ void Init()
     ledc_timer_config(&ledc_timer);
 
     ledc_channel_config_t ledc_channel_1 = {
-        .channel    = LEDC_CHANNEL_0,
+        .channel    = LEDC_CHANNEL_1,
         .duty       = 0,
         .gpio_num   = LED_1CH_PIN,
         .speed_mode = LEDC_HIGH_SPEED_MODE,
@@ -85,8 +89,9 @@ void Init()
         .timer_sel  = LEDC_TIMER_0
     };
     ledc_channel_config(&ledc_channel_1);
+
     ledc_channel_config_t ledc_channel_2 = {
-        .channel    = LEDC_CHANNEL_0,
+        .channel    = LEDC_CHANNEL_2,
         .duty       = 0,
         .gpio_num   = LED_2CH_PIN,
         .speed_mode = LEDC_HIGH_SPEED_MODE,
@@ -94,18 +99,26 @@ void Init()
         .timer_sel  = LEDC_TIMER_0
     };
     ledc_channel_config(&ledc_channel_2);
+    ledc_fade_func_install(0);
 }
 
 
 
 
 // --------------- HTTP Server --------------------------------------
+esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
+{
+    
+
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Some 404 error message");
+    return ESP_OK;
+}
 /* An HTTP GET handler */
 esp_err_t get_status_handler(httpd_req_t *req) {
-    char response[50];
+    char response[70];
     device_status_t *device = (device_status_t *)req->user_ctx; // Получаем указатель
     // на структуру device_status_t из req->user_ctx
-    snprintf(response, sizeof(response), "{\"lamp\":%d}", device->led_state); // Получаем состояние лампы
+    snprintf(response, sizeof(response), "{\"lamp\":%d, \"brigh\":%d, \"mode\":%d}", device->led_state, device->ledBrightness, device->mode); // Получаем состояние лампы
 
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
@@ -117,23 +130,6 @@ httpd_uri_t uri_get_status = {
     .handler   = get_status_handler,
     .user_ctx  = &device
 };
-
-
-esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
-{
-    if (strcmp("/hello", req->uri) == 0) {
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/hello URI is not available");
-        /* Return ESP_OK to keep underlying socket open */
-        return ESP_OK;
-    } else if (strcmp("/echo", req->uri) == 0) {
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "/echo URI is not available");
-        /* Return ESP_FAIL to close underlying socket */
-        return ESP_FAIL;
-    }
-    /* For any other URI send 404 and close socket */
-    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Some 404 error message");
-    return ESP_FAIL;
-}
 
 
 esp_err_t get_page_handler(httpd_req_t *req) {
@@ -156,16 +152,59 @@ httpd_uri_t uri_get_page = {
 
 
 
-
-
-
 // функция включения лампы
 void setLedCtrl(uint8_t lampState)
-{
+{   
     ESP_LOGI("URI","LED_state_chng, %d", lampState );
-    // ESP_ERROR_CHECK(gpio_set_level(RELEY_PIN, lampState));
-
     device.led_state = lampState;
+    // ESP_ERROR_CHECK(gpio_set_level(RELEY_PIN, lampState));
+    if (lampState == 1)
+    {
+        switch(device.mode)
+        {
+            case ALLTIME:
+            {
+                ESP_LOGI("mode","ALLTIME");
+                device.brightness_1ch = (1023 * device.ledBrightness) / 100;
+                device.brightness_2ch = (1023 * device.ledBrightness) / 100;
+                ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, device.brightness_1ch, 2000);
+                ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, LEDC_FADE_NO_WAIT);
+                ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, device.brightness_2ch, 2000);
+                ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, LEDC_FADE_NO_WAIT);
+            }
+            break;
+            case FADE:
+            {
+                
+                ESP_LOGW("LED_CTRL", "mode is not avaible");
+            }
+            break;
+            case FADE_ALTERNATELY:
+            {
+                
+                ESP_LOGW("LED_CTRL", "mode is not avaible");
+            }
+            break;
+            case HALF_FADE_ALTERNATELY:
+            {
+                
+                ESP_LOGW("LED_CTRL", "mode is not avaible");
+            }
+            break;
+            default:
+            {
+                ESP_LOGW("LED_CTRL", "mode is not avaible");
+            }
+        }
+    }else
+    {
+        // остановвить режим моргания
+        ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, 0, 1000);
+        ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, LEDC_FADE_NO_WAIT);
+        ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, 0, 1000);
+        ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, LEDC_FADE_NO_WAIT);
+    }
+    
 }
 
 
@@ -198,6 +237,69 @@ static const httpd_uri_t uri_ctrl_led = {
     .user_ctx  = NULL
 };
 
+
+void updateBrighness()
+{
+    device.brightness_1ch = (1023 * device.ledBrightness) / 100;
+    device.brightness_2ch = (1023 * device.ledBrightness) / 100;
+    if (device.led_state == 1 && device.mode == ALLTIME)
+    {
+        ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, device.brightness_1ch, 2000);
+        ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, LEDC_FADE_NO_WAIT);
+        ledc_set_fade_with_time(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, device.brightness_2ch, 2000);
+        ledc_fade_start(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, LEDC_FADE_NO_WAIT);
+}
+}
+
+
+static esp_err_t led_settings_put_handler(httpd_req_t *req)
+{
+    char* buf = malloc(req->content_len + 1);
+    ESP_LOGI("JSON", "json len: %d", req->content_len);
+    int8_t ret = httpd_req_recv(req, buf, req->content_len);
+    ESP_LOGI("JSON", "ret: %d",ret);
+    if (ret <= 0) return ESP_FAIL;
+    buf[ret] = '\0';
+    ESP_LOGI("JSON", "Received JSON: %s", buf);
+    uint8_t brighBuff;
+    uint8_t modeBuff;
+
+    sscanf(buf, "{\"brigh\":%d, \"mode\":%d}", (int *)&brighBuff, (int*)&modeBuff); // Разбираем JSON
+
+    ESP_LOGI("SETTINGS", "Brightness: %d, Mode: %d", brighBuff, modeBuff);
+    if(brighBuff != device.ledBrightness)
+    {
+        device.ledBrightness = brighBuff;
+        updateBrighness(); // Функция изменения яркости
+    }
+
+    if(modeBuff != device.mode)
+    {
+        device.mode = (ledc_mode_t)modeBuff;
+        //смена режима
+    }
+
+
+    httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
+    free(buf);
+    return ESP_OK;
+}
+
+
+static const httpd_uri_t uri_settings_led = {
+    .uri       = "/led/settings",
+    .method    = HTTP_PUT,
+    .handler   = led_settings_put_handler,
+    .user_ctx  = NULL
+};
+
+
+
+
+
+
+
+
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -219,6 +321,7 @@ static httpd_handle_t start_webserver(void)
         httpd_register_uri_handler(server, &uri_get_page);
         httpd_register_uri_handler(server, &uri_ctrl_led);
         httpd_register_uri_handler(server, &uri_get_status);
+        httpd_register_uri_handler(server, &uri_settings_led);
         // httpd_register_uri_handler(server, &ctrl);
         #if CONFIG_EXAMPLE_BASIC_AUTH
         httpd_register_basic_auth(server);
@@ -271,9 +374,10 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    gpio_reset_pin(RELEY_PIN);
-    gpio_set_direction(RELEY_PIN, GPIO_MODE_OUTPUT);
-    gpio_set_level(RELEY_PIN, 0);
+    Init();
+    // gpio_reset_pin(RELEY_PIN);
+    // gpio_set_direction(RELEY_PIN, GPIO_MODE_OUTPUT);
+    // gpio_set_level(RELEY_PIN, 0);
 
     /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
      * Read "Establishing Wi-Fi or Ethernet Connection" section in

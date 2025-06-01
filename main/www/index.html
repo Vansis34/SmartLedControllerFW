@@ -2,7 +2,7 @@
 <html lang="ru" style="font-size: 16px;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LED Controller with Slider</title>
+  <title>LED Controller WEB Interface</title>
   <style>
     html, body {
       margin: 0;
@@ -171,9 +171,10 @@
 ">
     <!-- Блок выбора опции -->
     <select id="mode-select">
-      <option value="opt1">Option 1</option>
-      <option value="opt2">Option 2</option>
-      <option value="opt3">Option 3</option>
+      <option value=1>Постоянно</option>
+      <option value=2>Общий фейд</option>
+      <option value=3>Переменный фейд</option>
+      <option value=4>Мерцание</option>
     </select>
 
     <!-- Блок слайдера -->
@@ -216,27 +217,27 @@
 
     // Отправка данных на сервер
     submitBtn.addEventListener('click', () => {
-      const selectedMode = modeSelect.value;
-      const sliderValue = slider.value;
+      let selectedMode = Number(modeSelect.value);
+      let sliderValue = Number(slider.value);
 
       // Визуальная обратная связь
       submitBtn.textContent = "Отправка...";
       submitBtn.disabled = true;
 
-      fetch('/api/control', {
-        method: 'POST',
+      fetch('/led/settings', {
+        method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({ 
-          mode: selectedMode,
-          brightness: sliderValue
+          brigh: sliderValue,
+          mode: selectedMode
         })
       })
       .then(response => {
         if (!response.ok) throw new Error('Ошибка сети');
-        return response.json();
+        return response.text();
       })
       .then(data => {
         console.log('Успех:', data);
@@ -263,7 +264,6 @@
     });
 
     let lampState = 0;
-    
     // Функция для загрузки состояния лампы с сервера
     function updateLampState() {
         fetch('/status')
@@ -271,6 +271,9 @@
         .then(data => {
             lampState = data.lamp; // Обновляем переменную
             document.getElementById("lampButton").innerText = lampState ? "Выключить лампу" : "Включить лампу";
+            slider.value = data.brigh;
+            updateSlider();
+            modeSelect.value = String(data.mode)
         })
         .catch(err => console.error("Ошибка получения статуса:", err));
     }
