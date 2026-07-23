@@ -1,3 +1,5 @@
 build/
+.pio/
+sdkconfig.esp32dev
 .vscode/
 ledc_fade_example_main.c
