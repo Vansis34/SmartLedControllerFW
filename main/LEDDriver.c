@@ -30,7 +30,7 @@ static QueueHandle_t s_state_queue;
 
 static const ledc_timer_config_t s_ledc_timer = {
     .speed_mode = LEDC_HIGH_SPEED_MODE,
-    .duty_resolution = LEDC_TIMER_10_BIT,
+    .duty_resolution = APP_LEDC_DUTY_RESOLUTION,
     .timer_num = LEDC_TIMER_0,
     .freq_hz = APP_LEDC_FREQUENCY_HZ,
     .clk_cfg = LEDC_AUTO_CLK,
