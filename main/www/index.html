@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- saved from url=(0055)file:///F:/Downloads/deepseek_html_20251019_2e6f06.html -->
 <html lang="ru" style="font-size: 16px;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -145,6 +146,11 @@
       margin-top: 10px;
     }
 
+    /* Стили для скрытия элемента */
+    .hidden {
+      display: none;
+    }
+
     @media (max-width: 600px) {
       .main-container {
         margin: 10px;
@@ -171,54 +177,99 @@
 ">
     <!-- Блок выбора опции -->
     <select id="mode-select">
-      <option value=1>Постоянно</option>
-      <option value=2>Общий фейд</option>
-      <option value=3>Переменный фейд</option>
-      <option value=4>Мерцание</option>
+      <option value="1">Постоянно</option>
+      <option value="2">Общий фейд</option>
+      <option value="3">Переменный фейд</option>
+      <option value="4">Мерцание</option>
     </select>
 
-    <!-- Блок слайдера -->
+    <!-- Блок слайдера яркости -->
     <div class="slider-container">
-      <h3>Управление яркостью</h3>
+      <h3>Яркость:<span id="sliderValue">57</span>%</h3></div> 
       <div class="slider-wrapper">
-        <div class="slider-progress" id="sliderProgress" style="width: 50%;"></div>
-        <input type="range" min="0" max="100" value="50" class="slider" id="mySlider">
-      </div>
-      <div class="value-display">Текущее значение: <span id="sliderValue">50</span>%</div>
+        <div class="slider-progress" id="sliderProgress" style="width: 57%; transition: width 0.1s;"></div>
+        <input type="range" min="0" max="100" value="50" class="slider" id="BrightnessSlider">
     </div>
+    <div class="slider-container" id="speedSliderContainer">
+      <h3>Скорость:<span id="speedSliderValue">32</span>%</h3>
+      <div class="slider-wrapper">
+        <div class="slider-progress" id="speedSliderProgress" style="width: 32%;"></div>
+        <input type="range" min="0" max="100" value="50" class="slider" id="SpeedSlider">
+      </div>
+    </div>
+    <button class="button" id="submit-btn">Применить параметры</button></div>
+
+    <!-- Блок слайдера скорости -->
+     
+      
+    
 
     <!-- Кнопка отправки -->
-    <button class="button" id="submit-btn">Применить настройки</button>
-  </div>
+    
+  
 
   <script>
     // Элементы DOM
     const modeSelect = document.getElementById("mode-select");
-    const slider = document.getElementById("mySlider");
+    const BrightnessSlider = document.getElementById("BrightnessSlider");
     const sliderProgress = document.getElementById("sliderProgress");
     const valueDisplay = document.getElementById("sliderValue");
     const submitBtn = document.getElementById("submit-btn");
+    
+    // Новые элементы для слайдера скорости
+    const SpeedSlider = document.getElementById("SpeedSlider");
+    const speedSliderProgress = document.getElementById("speedSliderProgress");
+    const speedValueDisplay = document.getElementById("speedSliderValue");
+    const speedSliderContainer = document.getElementById("speedSliderContainer");
 
-    // Инициализация слайдера
+    // Функция для скрытия/показа слайдера скорости
+    function toggleSpeedSlider() {
+      if (modeSelect.value === "1") {
+        // Скрыть при выборе "Постоянно"
+        speedSliderContainer.classList.add("hidden");
+      } else {
+        // Показать для других вариантов
+        speedSliderContainer.classList.remove("hidden");
+      }
+    }
+
+    // Инициализация слайдера яркости
     function updateSlider() {
-      const value = slider.value;
-      const max = slider.max;
+      const value = BrightnessSlider.value;
+      const max = BrightnessSlider.max;
       const percent = (value / max) * 100;
       
       sliderProgress.style.width = `${percent}%`;
       valueDisplay.textContent = value;
     }
 
-    // Обработчик изменения слайдера
-    slider.addEventListener('input', updateSlider);
+    // Инициализация слайдера скорости
+    function updateSpeedSlider() {
+      const value = SpeedSlider.value;
+      const max = SpeedSlider.max;
+      const percent = (value / max) * 100;
+      
+      speedSliderProgress.style.width = `${percent}%`;
+      speedValueDisplay.textContent = value;
+    }
+
+    // Обработчики изменения слайдеров
+    BrightnessSlider.addEventListener('input', updateSlider);
+    SpeedSlider.addEventListener('input', updateSpeedSlider);
+    
+    // Обработчик изменения выбора режима
+    modeSelect.addEventListener('change', toggleSpeedSlider);
 
     // Инициализация при загрузке
     updateSlider();
+    updateSpeedSlider();
+    toggleSpeedSlider(); // Установить начальное состояние
 
     // Отправка данных на сервер
     submitBtn.addEventListener('click', () => {
       let selectedMode = Number(modeSelect.value);
-      let sliderValue = Number(slider.value);
+      let sliderValue = Number(BrightnessSlider.value);
+      let speedValue = Number(SpeedSlider.value);
 
       // Визуальная обратная связь
       submitBtn.textContent = "Отправка...";
@@ -232,7 +283,8 @@
         },
         body: JSON.stringify({ 
           brigh: sliderValue,
-          mode: selectedMode
+          mode: selectedMode,
+          speed: speedValue // Добавляем значение скорости
         })
       })
       .then(response => {
@@ -255,11 +307,11 @@
     });
 
     // Дополнительная анимация для улучшения UX
-    slider.addEventListener('mousedown', () => {
+    BrightnessSlider.addEventListener('mousedown', () => {
       document.querySelector('.slider-progress').style.transition = 'none';
     });
 
-    slider.addEventListener('mouseup', () => {
+    BrightnessSlider.addEventListener('mouseup', () => {
       document.querySelector('.slider-progress').style.transition = 'width 0.1s ease';
     });
 
@@ -271,9 +323,18 @@
         .then(data => {
             lampState = data.lamp; // Обновляем переменную
             document.getElementById("lampButton").innerText = lampState ? "Выключить лампу" : "Включить лампу";
-            slider.value = data.brigh;
+            BrightnessSlider.value = data.brigh;
             updateSlider();
-            modeSelect.value = String(data.mode)
+            modeSelect.value = String(data.mode);
+            
+            // Обновляем слайдер скорости, если данные есть
+            if (data.speed !== undefined) {
+              SpeedSlider.value = data.speed;
+              updateSpeedSlider();
+            }
+            
+            // Обновляем видимость слайдера скорости
+            toggleSpeedSlider();
         })
         .catch(err => console.error("Ошибка получения статуса:", err));
     }
@@ -288,12 +349,16 @@
         fetch('/led/ctrl', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: lampState })
+            body: JSON.stringify({ 
+              state: lampState, 
+              mode: Number(modeSelect.value),
+              speed: Number(SpeedSlider.value)
+            })
         })
         .then(() => {
             document.getElementById("lampButton").innerText = lampState ? "Выключить лампу" : "Включить лампу";
         })
         .catch(err => console.error("Ошибка:", err));
     });
-    </script>
+  </script>
 </body></html>
