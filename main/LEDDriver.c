@@ -135,40 +135,97 @@ static bool advance_motion(const led_motion_t *motion, TickType_t now)
 static void active_timing(const app_state_snapshot_t *state,
                           uint32_t *fade_ms, uint32_t *pause_ms)
 {
-    if (state->mode == LED_MODE_FADE) {
+    switch (state->mode) {
+    case LED_MODE_FADE:
         *fade_ms = state->fade.fade_ms;
         *pause_ms = state->fade.pause_ms;
-    } else if (state->mode == LED_MODE_ALTERNATE) {
+        break;
+    case LED_MODE_ALTERNATE:
         *fade_ms = state->alternate.fade_ms;
         *pause_ms = state->alternate.pause_ms;
-    } else {
+        break;
+    case LED_MODE_HALF_ALTERNATE:
         *fade_ms = state->half_alternate.fade_ms;
         *pause_ms = state->half_alternate.pause_ms;
+        break;
+    default:
+        /*
+         * AppState validation prevents this branch. Safe zero values keep this
+         * helper deterministic if its contract is accidentally violated later.
+         */
+        *fade_ms = 0U;
+        *pause_ms = 0U;
+        break;
     }
 }
 
 /**
- * @brief Schedule one animation movement toward the selected boundary.
+ * @brief Calculate channel targets for one boundary of a lighting mode.
+ * @param state Validated application state.
+ * @param high_phase Selects the first or second animation boundary.
+ * @param[out] target_1 Calculated duty for channel 1.
+ * @param[out] target_2 Calculated duty for channel 2.
+ * @return true for a known mode, or false after selecting safe zero targets.
+ *
+ * In alternate modes high_phase names the boundary where channel 1 is high.
+ * In synchronous fade it names the boundary where both channels are high.
+ */
+static bool calculate_mode_targets(const app_state_snapshot_t *state,
+                                   bool high_phase,
+                                   uint32_t *target_1,
+                                   uint32_t *target_2)
+{
+    const uint32_t high = percent_to_duty(state->brightness);
+
+    switch (state->mode) {
+    case LED_MODE_ALLTIME:
+        *target_1 = high;
+        *target_2 = high;
+        return true;
+    case LED_MODE_FADE:
+        *target_1 = high_phase ? high : 0U;
+        *target_2 = *target_1;
+        return true;
+    case LED_MODE_ALTERNATE:
+        *target_1 = high_phase ? high : 0U;
+        *target_2 = high_phase ? 0U : high;
+        return true;
+    case LED_MODE_HALF_ALTERNATE: {
+        const uint32_t low =
+            percent_to_duty(state->half_alternate.lower_brightness);
+        *target_1 = high_phase ? high : low;
+        *target_2 = high_phase ? low : high;
+        return true;
+    }
+    default:
+        /*
+         * A corrupted mode must fail dark instead of unexpectedly energizing
+         * a channel. Valid snapshots cannot normally reach this branch.
+         */
+        *target_1 = 0U;
+        *target_2 = 0U;
+        return false;
+    }
+}
+
+/**
+ * @brief Schedule one animated movement toward the selected boundary.
+ * @param state Validated snapshot containing mode, brightness and profiles.
+ * @param high_phase Selects which animation boundary is approached.
+ * @param[out] motion Motion descriptor initialized from current PWM duties.
  */
 static void begin_animation_motion(const app_state_snapshot_t *state,
                                    bool high_phase, led_motion_t *motion)
 {
-    const uint32_t high = percent_to_duty(state->brightness);
-    const uint32_t low = state->mode == LED_MODE_HALF_ALTERNATE
-                             ? percent_to_duty(state->half_alternate.lower_brightness)
-                             : 0U;
+    uint32_t target_1;
+    uint32_t target_2;
     uint32_t fade_ms;
     uint32_t pause_ms;
+
+    (void)calculate_mode_targets(state, high_phase, &target_1, &target_2);
     active_timing(state, &fade_ms, &pause_ms);
     (void)pause_ms;
-
-    if (state->mode == LED_MODE_FADE) {
-        begin_motion(motion, high_phase ? high : 0U,
-                     high_phase ? high : 0U, fade_ms);
-    } else {
-        begin_motion(motion, high_phase ? high : low,
-                     high_phase ? low : high, fade_ms);
-    }
+    begin_motion(motion, target_1, target_2, fade_ms);
 }
 
 /**
@@ -182,8 +239,11 @@ static led_worker_phase_t apply_snapshot(const app_state_snapshot_t *state,
     if (!state->power) {
         begin_motion(motion, 0U, 0U, APP_POWER_TRANSITION_MS);
     } else if (state->mode == LED_MODE_ALLTIME) {
-        const uint32_t duty = percent_to_duty(state->brightness);
-        begin_motion(motion, duty, duty, APP_LEVEL_TRANSITION_MS);
+        uint32_t target_1;
+        uint32_t target_2;
+        (void)calculate_mode_targets(state, *high_phase,
+                                     &target_1, &target_2);
+        begin_motion(motion, target_1, target_2, APP_LEVEL_TRANSITION_MS);
     } else {
         begin_animation_motion(state, *high_phase, motion);
     }
