@@ -27,6 +27,7 @@ typedef struct {
 
 static const char *TAG = "LED";
 static QueueHandle_t s_state_queue;
+static TaskHandle_t s_worker_task;
 
 static const ledc_timer_config_t s_ledc_timer = {
     .speed_mode = LEDC_HIGH_SPEED_MODE,
@@ -212,7 +213,9 @@ static void led_worker(void *argument)
 
     for (;;) {
         app_state_snapshot_t incoming;
-        if (xQueueReceive(s_state_queue, &incoming, pdMS_TO_TICKS(10)) == pdPASS) {
+        if (xQueueReceive(s_state_queue,
+                          &incoming,
+                          pdMS_TO_TICKS(10)) == pdPASS) {
             state = incoming;
             phase = apply_snapshot(&state, &high_phase, &motion);
             continue;
@@ -241,17 +244,40 @@ static void led_worker(void *argument)
     }
 }
 
-/** @brief Forward the newest state snapshot to the LED worker. */
+/**
+ * @brief Forward the newest committed snapshot to the LED worker.
+ *
+ * This callback runs in the task that changed AppState. xQueueOverwrite() is
+ * non-blocking for the one-element queue: an unprocessed older snapshot is
+ * intentionally replaced because PWM only needs the newest desired state.
+ *
+ * @param snapshot Stable copy of the committed application state.
+ * @param changed_mask Fields changed by the commit (not needed by LED).
+ * @param context Unused listener context.
+ */
 static void state_listener(const app_state_snapshot_t *snapshot,
                            uint32_t changed_mask, void *context)
 {
     (void)changed_mask;
     (void)context;
-    xQueueOverwrite(s_state_queue, snapshot);
+
+    if (s_state_queue == NULL ||
+        xQueueOverwrite(s_state_queue, snapshot) != pdPASS) {
+        /*
+         * A valid one-element queue cannot normally reject overwrite. Logging
+         * exposes an internal lifecycle violation without blocking the task
+         * that applied AppState.
+         */
+        ESP_LOGE(TAG, "failed to forward state snapshot");
+    }
 }
 
 esp_err_t LED_Init(void)
 {
+    if (s_state_queue != NULL || s_worker_task != NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
     ESP_RETURN_ON_ERROR(ledc_timer_config(&s_ledc_timer), TAG,
                         "failed to configure LEDC timer");
     for (size_t i = 0; i < 2; ++i) {
@@ -265,7 +291,12 @@ esp_err_t LED_Init(void)
     }
     ESP_RETURN_ON_ERROR(AppState_Subscribe(state_listener, NULL), TAG,
                         "failed to subscribe to state");
-    if (xTaskCreate(led_worker, "led_worker", 4096, NULL, 6, NULL) != pdPASS) {
+    if (xTaskCreate(led_worker,
+                    "led_worker",
+                    4096,
+                    NULL,
+                    6,
+                    &s_worker_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
