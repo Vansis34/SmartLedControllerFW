@@ -16,7 +16,7 @@
 
 - [x] F-01 Создать compile-time конфигурацию аппаратуры в `app_config.h`.
 - [x] F-02 Ввести потокобезопасный центральный state-store и единые типы состояния.
-- [ ] F-03 Добавить custom partition table для flash 2 MB без OTA.
+- [x] F-03 Добавить custom partition table для flash 2 MB без OTA.
 - [x] F-04 Заменить небезопасный разбор HTTP JSON на cJSON и ограниченный receive-loop.
 - [ ] F-05 Автоматизировать обновление gzip web-страницы.
 
@@ -83,3 +83,7 @@
   применяет patch через copy/validate/commit и выдаёт стабильные snapshots.
   Смысловые поля сравниваются без `memcmp` по padding-байтам, а список
   подписчиков копируется под mutex перед вызовом callbacks.
+- 2026-07-23 — завершена F-03: custom partition table для 2 MiB flash
+  содержит NVS 24 KiB, PHY 4 KiB и factory app 1984 KiB без OTA. PlatformIO и
+  `sdkconfig` используют один `partitions.csv`; бинарная таблица декодирована
+  и проверена штатным инструментом ESP-IDF.
