@@ -1,7 +1,5 @@
 #include "AppState.h"
 
-#include <string.h>
-
 #include "app_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -25,6 +23,38 @@ static bool profile_is_valid(const animation_profile_t *profile)
     return profile->fade_ms >= APP_MIN_FADE_MS &&
            profile->fade_ms <= APP_MAX_FADE_MS &&
            profile->pause_ms <= APP_MAX_PAUSE_MS;
+}
+
+/**
+ * @brief Compare the logical fields of two animation profiles.
+ *
+ * Field-wise comparison is intentional. Comparing whole C structures with
+ * memcmp() may include unspecified padding bytes that are not part of state.
+ *
+ * @param left First profile.
+ * @param right Second profile.
+ * @return true when both timing values are equal.
+ */
+static bool profiles_are_equal(const animation_profile_t *left,
+                               const animation_profile_t *right)
+{
+    return left->fade_ms == right->fade_ms &&
+           left->pause_ms == right->pause_ms;
+}
+
+/**
+ * @brief Compare the logical fields of two half-alternate profiles.
+ *
+ * @param left First profile.
+ * @param right Second profile.
+ * @return true when timing and lower brightness are equal.
+ */
+static bool half_profiles_are_equal(const half_animation_profile_t *left,
+                                    const half_animation_profile_t *right)
+{
+    return left->fade_ms == right->fade_ms &&
+           left->pause_ms == right->pause_ms &&
+           left->lower_brightness == right->lower_brightness;
 }
 
 /**
@@ -89,7 +119,12 @@ esp_err_t AppState_Init(const app_state_snapshot_t *restored)
     // HV9910B channels before all controller tasks are ready.
     s_state.power = false;
     s_state.revision = 1;
-    memset(s_listeners, 0, sizeof(s_listeners));
+
+    // Static-storage objects start zeroed. Clearing explicitly also documents
+    // that initialization begins with no registered event consumers.
+    for (size_t i = 0; i < APP_STATE_MAX_SUBSCRIBERS; ++i) {
+        s_listeners[i] = (listener_slot_t){0};
+    }
     return ESP_OK;
 }
 
@@ -121,27 +156,42 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
 
     app_state_snapshot_t candidate;
     uint32_t changes = 0;
+    listener_slot_t listeners[APP_STATE_MAX_SUBSCRIBERS] = {0};
 
     xSemaphoreTake(s_state_mutex, portMAX_DELAY);
     candidate = s_state;
 
-#define APPLY_FIELD(mask_value, member)                                      \
-    do {                                                                      \
-        if ((patch->mask & (mask_value)) != 0U &&                             \
-            memcmp(&candidate.member, &patch->values.member,                  \
-                   sizeof(candidate.member)) != 0) {                          \
-            candidate.member = patch->values.member;                         \
-            changes |= (mask_value);                                          \
-        }                                                                     \
-    } while (0)
-
-    APPLY_FIELD(APP_STATE_FIELD_POWER, power);
-    APPLY_FIELD(APP_STATE_FIELD_BRIGHTNESS, brightness);
-    APPLY_FIELD(APP_STATE_FIELD_MODE, mode);
-    APPLY_FIELD(APP_STATE_FIELD_FADE_PROFILE, fade);
-    APPLY_FIELD(APP_STATE_FIELD_ALTERNATE_PROFILE, alternate);
-    APPLY_FIELD(APP_STATE_FIELD_HALF_PROFILE, half_alternate);
-#undef APPLY_FIELD
+    if ((patch->mask & APP_STATE_FIELD_POWER) != 0U &&
+        candidate.power != patch->values.power) {
+        candidate.power = patch->values.power;
+        changes |= APP_STATE_FIELD_POWER;
+    }
+    if ((patch->mask & APP_STATE_FIELD_BRIGHTNESS) != 0U &&
+        candidate.brightness != patch->values.brightness) {
+        candidate.brightness = patch->values.brightness;
+        changes |= APP_STATE_FIELD_BRIGHTNESS;
+    }
+    if ((patch->mask & APP_STATE_FIELD_MODE) != 0U &&
+        candidate.mode != patch->values.mode) {
+        candidate.mode = patch->values.mode;
+        changes |= APP_STATE_FIELD_MODE;
+    }
+    if ((patch->mask & APP_STATE_FIELD_FADE_PROFILE) != 0U &&
+        !profiles_are_equal(&candidate.fade, &patch->values.fade)) {
+        candidate.fade = patch->values.fade;
+        changes |= APP_STATE_FIELD_FADE_PROFILE;
+    }
+    if ((patch->mask & APP_STATE_FIELD_ALTERNATE_PROFILE) != 0U &&
+        !profiles_are_equal(&candidate.alternate, &patch->values.alternate)) {
+        candidate.alternate = patch->values.alternate;
+        changes |= APP_STATE_FIELD_ALTERNATE_PROFILE;
+    }
+    if ((patch->mask & APP_STATE_FIELD_HALF_PROFILE) != 0U &&
+        !half_profiles_are_equal(&candidate.half_alternate,
+                                 &patch->values.half_alternate)) {
+        candidate.half_alternate = patch->values.half_alternate;
+        changes |= APP_STATE_FIELD_HALF_PROFILE;
+    }
 
     if (!state_is_valid(&candidate)) {
         xSemaphoreGive(s_state_mutex);
@@ -155,6 +205,18 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
     if (result != NULL) {
         *result = s_state;
     }
+
+    if (changes != 0U) {
+        /*
+         * Take a stable copy while the registry is protected. Callbacks are
+         * invoked only after unlock, so they may safely call AppState_Get()
+         * without deadlocking on this mutex. A listener should not recursively
+         * apply state because nested notifications would obscure event order.
+         */
+        for (size_t i = 0; i < APP_STATE_MAX_SUBSCRIBERS; ++i) {
+            listeners[i] = s_listeners[i];
+        }
+    }
     xSemaphoreGive(s_state_mutex);
 
     if (changed_mask != NULL) {
@@ -165,9 +227,9 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
     // but must remain non-blocking and normally only notify their worker task.
     if (changes != 0U) {
         for (size_t i = 0; i < APP_STATE_MAX_SUBSCRIBERS; ++i) {
-            if (s_listeners[i].callback != NULL) {
-                s_listeners[i].callback(&candidate, changes,
-                                        s_listeners[i].context);
+            if (listeners[i].callback != NULL) {
+                listeners[i].callback(&candidate, changes,
+                                      listeners[i].context);
             }
         }
     }
@@ -176,8 +238,11 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
 
 esp_err_t AppState_Subscribe(app_state_listener_t listener, void *context)
 {
-    if (listener == NULL || s_state_mutex == NULL) {
+    if (listener == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (s_state_mutex == NULL) {
+        return ESP_ERR_INVALID_STATE;
     }
 
     xSemaphoreTake(s_state_mutex, portMAX_DELAY);

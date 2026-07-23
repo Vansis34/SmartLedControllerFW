@@ -27,7 +27,12 @@ typedef struct {
     uint8_t lower_brightness;
 } half_animation_profile_t;
 
-/** @brief Immutable copy of the complete runtime lighting state. */
+/**
+ * @brief Stable value-copy of the complete runtime lighting state.
+ *
+ * A snapshot does not point into the central store. The receiver owns its copy
+ * and may keep or modify it without racing with later state revisions.
+ */
 typedef struct {
     bool power;
     uint8_t brightness;
@@ -54,6 +59,18 @@ typedef struct {
     app_state_snapshot_t values;
 } app_state_patch_t;
 
+/**
+ * @brief Receive a committed state change after the central mutex is released.
+ *
+ * The callback runs synchronously in the task that called AppState_Apply().
+ * It must remain non-blocking and must not call AppState_Apply() recursively;
+ * the normal pattern is an overwrite queue or a FreeRTOS task notification to
+ * a dedicated consumer task.
+ *
+ * @param snapshot Stable copy of the newly committed state.
+ * @param changed_mask Bit mask of fields that actually changed.
+ * @param context Opaque pointer supplied during subscription.
+ */
 typedef void (*app_state_listener_t)(const app_state_snapshot_t *snapshot,
                                      uint32_t changed_mask,
                                      void *context);
@@ -87,7 +104,8 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
  * @brief Register a non-blocking listener invoked after successful changes.
  * @param listener Callback that receives a stable snapshot.
  * @param context Opaque pointer returned to the callback.
- * @return ESP_OK or ESP_ERR_NO_MEM when all listener slots are occupied.
+ * @return ESP_OK, ESP_ERR_INVALID_ARG, ESP_ERR_INVALID_STATE, or
+ *         ESP_ERR_NO_MEM when all listener slots are occupied.
  */
 esp_err_t AppState_Subscribe(app_state_listener_t listener, void *context);
 
