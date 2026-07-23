@@ -1,1 +1,57 @@
-Project on ESP32 to replace the Chinese garland controller with your own with blackjack and girls. Control from a button, WEB interface and MQTT.
+# LED Controller FW
+
+Прошивка двухканального LED-контроллера для ESP32. Управление выполняется
+через встроенную веб-страницу; алгоритмы свечения реализованы на периферии
+LEDC и FreeRTOS.
+
+## Среда сборки
+
+Проект собирается в PlatformIO с фреймворком ESP-IDF. Версии закреплены в
+`platformio.ini`, чтобы обновление PlatformIO не меняло SDK незаметно:
+
+- PlatformIO Espressif32: 6.5.0;
+- ESP-IDF: 5.1.2;
+- Xtensa GCC: 12.2.0;
+- плата: generic ESP32 Dev Module;
+- flash: 2 MB.
+
+Предыдущая нативная сборка использовала тег ESP-IDF `v5.1`. PlatformIO не
+поставляет официальный framework-пакет для точного исходного тега, поэтому
+используется patch-релиз 5.1.2 той же ветки и с тем же поколением toolchain.
+
+## Сборка
+
+В VS Code установите расширение PlatformIO IDE, откройте корень проекта и
+выберите задачу `PlatformIO: Build`.
+
+Из терминала PlatformIO Core используются команды:
+
+```powershell
+pio run
+pio run --target upload
+pio device monitor
+```
+
+Если `pio` не добавлен в `PATH`, команды доступны через терминал расширения
+PlatformIO либо по полному пути к его виртуальному окружению.
+
+## Конфигурация ESP-IDF
+
+Текущий `sdkconfig` сохранён и используется PlatformIO. Открыть его
+интерактивную конфигурацию можно командой:
+
+```powershell
+pio run --target menuconfig
+```
+
+Компонент `protocol_examples_common` пока подключается напрямую из каталога
+примеров закреплённого ESP-IDF. Локальная копия не понадобилась, поскольку
+официальный PlatformIO framework содержит этот компонент.
+
+Веб-страница хранится в `main/www/index.html`, а прошивка отдаёт её gzip-копию
+`main/www/index.html.gz`. После изменения HTML gzip-файл необходимо обновить до
+сборки.
+
+> Важно: параметры Wi-Fi сейчас находятся в `sdkconfig`. Не публикуйте реальные
+> учётные данные. В дальнейшем их лучше вынести в локальный, игнорируемый Git
+> файл или настраивать через provisioning/NVS.
