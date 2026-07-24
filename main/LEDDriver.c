@@ -131,6 +131,9 @@ static bool advance_motion(const led_motion_t *motion, TickType_t now)
 
 /**
  * @brief Read fade and boundary pause of the selected animated mode.
+ * @param state Validated snapshot containing the selected mode profiles.
+ * @param[out] fade_ms Fade duration in milliseconds.
+ * @param[out] pause_ms Boundary pause duration in milliseconds.
  */
 static void active_timing(const app_state_snapshot_t *state,
                           uint32_t *fade_ms, uint32_t *pause_ms)
@@ -230,6 +233,14 @@ static void begin_animation_motion(const app_state_snapshot_t *state,
 
 /**
  * @brief Apply a complete snapshot and schedule its first transition.
+ * @param state Newest committed application state.
+ * @param[out] high_phase Animation phase reset to its deterministic first edge.
+ * @param[out] motion New motion starting at the current hardware duties.
+ * @return Worker phase selected for the newly scheduled transition.
+ *
+ * Reading current LEDC duties makes replacement interruptible: a new state
+ * continues smoothly from the visible level instead of waiting for or jumping
+ * to the end of the superseded transition.
  */
 static led_worker_phase_t apply_snapshot(const app_state_snapshot_t *state,
                                          bool *high_phase,
@@ -251,13 +262,27 @@ static led_worker_phase_t apply_snapshot(const app_state_snapshot_t *state,
 }
 
 /**
+ * @brief Compare a FreeRTOS deadline safely across tick counter wraparound.
+ * @param now Current tick counter value.
+ * @param deadline Previously calculated deadline.
+ * @return true when now is equal to or later than deadline.
+ *
+ * The signed-difference idiom is valid because every configured delay is far
+ * shorter than half of TickType_t's range.
+ */
+static bool tick_deadline_reached(TickType_t now, TickType_t deadline)
+{
+    return (int32_t)(now - deadline) >= 0;
+}
+
+/**
  * @brief Consume state snapshots and advance interruptible LED animations.
  * @param argument Unused FreeRTOS task parameter.
  *
- * ESP32's LEDC hardware cannot abort an active hardware fade. A short 10 ms
- * software interpolation therefore controls the hardware PWM duty directly.
- * This retains stable 3 kHz PWM while making mode, power and profile changes
- * responsive even during a 30-second transition.
+ * ESP32's LEDC hardware cannot abort an active hardware fade. Short software
+ * interpolation steps therefore control the hardware PWM duty directly. This
+ * retains stable 3 kHz PWM while making mode, power and profile changes
+ * responsive even during a long transition.
  */
 static void led_worker(void *argument)
 {
@@ -275,9 +300,24 @@ static void led_worker(void *argument)
         app_state_snapshot_t incoming;
         if (xQueueReceive(s_state_queue,
                           &incoming,
-                          pdMS_TO_TICKS(10)) == pdPASS) {
-            state = incoming;
-            phase = apply_snapshot(&state, &high_phase, &motion);
+                          pdMS_TO_TICKS(APP_LED_WORKER_STEP_MS)) == pdPASS) {
+            app_state_snapshot_t latest;
+            (void)incoming;
+
+            /*
+             * Concurrent AppState callbacks may reach this overwrite queue out
+             * of revision order. Re-reading the central store turns the queued
+             * snapshot into a wake-up plus value copy and guarantees that an
+             * older callback cannot roll the LEDs back or hide a newer state.
+             */
+            if (AppState_Get(&latest) != ESP_OK) {
+                ESP_LOGE(TAG, "failed to refresh application state");
+                continue;
+            }
+            if (latest.revision != state.revision) {
+                state = latest;
+                phase = apply_snapshot(&state, &high_phase, &motion);
+            }
             continue;
         }
 
@@ -296,7 +336,7 @@ static void led_worker(void *argument)
         }
 
         if (phase == LED_WORKER_PAUSING &&
-            (int32_t)(now - pause_deadline) >= 0) {
+            tick_deadline_reached(now, pause_deadline)) {
             high_phase = !high_phase;
             begin_animation_motion(&state, high_phase, &motion);
             phase = LED_WORKER_MOVING;

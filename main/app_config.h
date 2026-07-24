@@ -25,6 +25,7 @@
     ((1U << APP_LEDC_DUTY_RESOLUTION_BITS) - 1U)
 #define APP_POWER_TRANSITION_MS              1000U
 #define APP_LEVEL_TRANSITION_MS              300U
+#define APP_LED_WORKER_STEP_MS               10U
 
 /* Physical button timing. */
 #define APP_BUTTON_DEBOUNCE_MS               50U
@@ -74,4 +75,6 @@ _Static_assert(APP_MIN_FADE_MS <= APP_DEFAULT_FADE_MS &&
                "Default fade duration is outside configured limits");
 _Static_assert(APP_DEFAULT_PAUSE_MS <= APP_MAX_PAUSE_MS,
                "Default pause duration is outside configured limits");
+_Static_assert(APP_LED_WORKER_STEP_MS > 0U,
+               "LED worker step must be greater than zero");
 
