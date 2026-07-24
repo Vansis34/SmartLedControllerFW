@@ -26,16 +26,20 @@
 - Целевая плата из текущего `sdkconfig`: `esp32`, Xtensa, flash 2 MB.
 - Артефакты последней обычной ESP-IDF сборки (`build.ninja` и `compile_commands.json`) фиксируют `IDF_VER="v5.1"` и toolchain GCC 12.2.0.
 - Проект перенесён на PlatformIO: Espressif32 6.5.0, официальный framework ESP-IDF 5.1.2 (`3.50102.240122`), GCC 12.2.0. Patch-обновление 5.1 → 5.1.2 принято потому, что raw git tag ESP-IDF не является корректно упакованным PlatformIO framework; версии закреплены в `platformio.ini`.
-- Контроллер подключается к Wi-Fi через `protocol_examples_common` (`example_connect`) и поднимает HTTP-сервер на стандартном порту.
+- Для тестовой итерации контроллер подключается к Wi-Fi через неизменённый
+  `protocol_examples_common` (`example_connect`) по compile-time
+  `CONFIG_EXAMPLE_WIFI_SSID/PASSWORD` и поднимает HTTP-сервер после получения
+  IPv4.
 - Веб-страница встроена в прошивку как `main/www/index.html.gz` через `EMBED_FILES`.
 - PWM: LEDC high-speed, таймер 0, 10 бит (0..1023), 3 kHz.
-- Каналы: GPIO14 (`LED_1CH_PIN`) и GPIO12 (`LED_2CH_PIN`). GPIO13 объявлен как `RELEY_PIN`, но сейчас не используется.
+- Каналы: GPIO14 и GPIO12. GPIO13 — active-high push-pull/touch кнопка без
+  внутренних pull-up/pull-down.
 - MQTT упомянут только в README; реализации MQTT в текущих исходниках нет.
 
 ## Карта файлов
 
 - `main/main.c` — запуск NVS/network/event loop, `AppState`, LED-драйвера,
-  подключения к сети и жизненного цикла HTTP-сервера.
+  кнопки, тестового STA-подключения и жизненного цикла HTTP-сервера.
 - `main/app_config.h` — активная compile-time конфигурация аппаратуры,
   defaults и лимитов; содержит проверки инвариантов сборки.
 - `main/AppState.c/.h` — mutex-защищённый источник правды, типы состояния,
@@ -84,10 +88,13 @@ mutex. Перед уведомлением он копируется в лока
 ## HTTP API и веб-интерфейс
 
 - `GET /` — gzip HTML.
-- `GET /status` — сейчас возвращает `{"lamp":..., "brigh":..., "mode":...}`.
-- `PUT /led/ctrl` — UI отправляет `{"state":...,"mode":...,"speed":...}`; обработчик пытается получить только state/mode.
-- `PUT /led/settings` — UI отправляет `{"brigh":...,"mode":...,"speed":...}`; обработчик пытается получить только brightness/mode.
-- UI предлагает четыре режима, кнопку on/off, яркость 0..100 и скорость 0..100. Скорость скрывается для постоянного режима.
+- `GET /status` возвращает
+  `{"lamp":...,"brigh":...,"mode":...,"revision":...}`.
+- `PUT /led/ctrl` — UI отправляет подтверждаемое `{"state":bool}`.
+- `PUT /led/settings` — UI отправляет `{"brigh":0..100,"mode":1..4}`.
+- UI предлагает четыре режима, кнопку on/off и яркость 0..100. Старый speed
+  скрыт до появления API раздельных fade/pause профилей.
+- Polling `/status` раз в секунду отражает изменения от физической кнопки.
 
 ## Подтверждённые недочёты
 
@@ -147,6 +154,26 @@ mutex. Перед уведомлением он копируется в лока
 
 ## Исправлено
 
+- **2026-07-24, debug tracing:** default/max compile-time log level установлен
+  в DEBUG. `WEB` пишет успешный разбор JSON без содержимого body; `APP_STATE`
+  пишет mask и revision валидного кандидата; `LED` пишет начало движения,
+  нормальное завершение и замену незавершённого fade (`superseded`). Пароли в
+  диагностику не попадают. DEBUG увеличил итоговый flash до 856 353 B
+  (42,2%), RAM до 31 988 B (9,8%).
+- **2026-07-24, L-04:** `Button_Init(NULL)` подключён к запуску приложения.
+  GPIO13 опрашивается каждые `APP_BUTTON_POLL_MS`, debounce отделяет сырой
+  уровень от стабильного, а короткое нажатие формируется только при отпускании
+  и меняет `AppState.power`. Задача защищена от повторной инициализации.
+  Длительное нажатие определяется, но callback factory reset будет подключён
+  после N-03.
+- **2026-07-24, test Wi-Fi:** стандартные NVS recovery cases обрабатываются
+  erase/retry; network handlers регистрируются до `example_connect()`;
+  HTTP-server запускается событием `IP_EVENT_STA_GOT_IP`. В UART печатается
+  SSID, но не пароль. `protocol_examples_common` не изменён.
+- **2026-07-24, W-03:** JavaScript соответствует legacy API, проверяет
+  `response.ok` и JSON error, не меняет lamp state оптимистично, после PUT
+  перечитывает `/status` и polling-ом отражает внешние изменения. Поле `speed`
+  больше не отправляется.
 - **2026-07-24, упрощение LED signaling:** overwrite-очередь удалена, поскольку
   её payload после защиты revision намеренно не использовался. Listener теперь
   вызывает `xTaskNotifyGive()`, а worker после `ulTaskNotifyTake()` читает
@@ -302,3 +329,12 @@ MQTT и persistence не получают уведомлений. LED notificati
 данные: worker после пробуждения получает независимую копию последнего
 подтверждённого состояния через `AppState_Get()`, а не указатель на глобальный
 state.
+
+## Временная compile-time конфигурация Wi-Fi
+
+- `protocol_examples_common` получает SSID и пароль из
+  `CONFIG_EXAMPLE_WIFI_SSID`/`CONFIG_EXAMPLE_WIFI_PASSWORD` в `sdkconfig`.
+- Значения вшиваются в firmware и подходят только для тестового этапа до N-04.
+- Пароль сейчас находится в отслеживаемом Git файле. Перед публикацией или
+  передачей firmware его необходимо сменить и перейти на provisioning/NVS.
+- Прошивка намеренно не печатает пароль в UART.
