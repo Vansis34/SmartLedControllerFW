@@ -103,6 +103,10 @@ static esp_err_t receive_json_object(httpd_req_t *req, cJSON **root)
     }
 
     *root = parsed;
+    ESP_LOGD(TAG,
+             "JSON request received: uri=%s body_bytes=%d",
+             req->uri,
+             req->content_len);
     return ESP_OK;
 }
 

@@ -1,6 +1,7 @@
 #include "AppState.h"
 
 #include "app_config.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -12,6 +13,7 @@ typedef struct {
 static SemaphoreHandle_t s_state_mutex;
 static app_state_snapshot_t s_state;
 static listener_slot_t s_listeners[APP_STATE_MAX_SUBSCRIBERS];
+static const char *TAG = "APP_STATE";
 
 /**
  * @brief Check profile time limits common to all animated modes.
@@ -218,6 +220,13 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
         }
     }
     xSemaphoreGive(s_state_mutex);
+
+    ESP_LOGD(TAG,
+             "candidate validated: requested=0x%02lx changed=0x%02lx "
+             "revision=%lu",
+             (unsigned long)patch->mask,
+             (unsigned long)changes,
+             (unsigned long)candidate.revision);
 
     if (changed_mask != NULL) {
         *changed_mask = changes;

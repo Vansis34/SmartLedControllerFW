@@ -22,6 +22,7 @@ typedef struct {
     uint32_t target_duty[2];
     TickType_t started_at;
     TickType_t duration_ticks;
+    bool active;
 } led_motion_t;
 
 static const char *TAG = "LED";
@@ -89,6 +90,10 @@ static void set_duties(uint32_t duty_1, uint32_t duty_2)
 static void begin_motion(led_motion_t *motion, uint32_t target_1,
                          uint32_t target_2, uint32_t duration_ms)
 {
+    if (motion->active) {
+        ESP_LOGD(TAG, "fade stopped: reason=superseded");
+    }
+
     motion->start_duty[0] = ledc_get_duty(s_channels[0].speed_mode,
                                           s_channels[0].channel);
     motion->start_duty[1] = ledc_get_duty(s_channels[1].speed_mode,
@@ -100,6 +105,15 @@ static void begin_motion(led_motion_t *motion, uint32_t target_1,
     if (motion->duration_ticks == 0) {
         motion->duration_ticks = 1;
     }
+    motion->active = true;
+
+    ESP_LOGD(TAG,
+             "fade started: duty=(%lu,%lu)->(%lu,%lu) duration_ms=%lu",
+             (unsigned long)motion->start_duty[0],
+             (unsigned long)motion->start_duty[1],
+             (unsigned long)motion->target_duty[0],
+             (unsigned long)motion->target_duty[1],
+             (unsigned long)duration_ms);
 }
 
 /**
@@ -108,11 +122,16 @@ static void begin_motion(led_motion_t *motion, uint32_t target_1,
  * @param now Current FreeRTOS tick.
  * @return true after both channels reach their exact targets.
  */
-static bool advance_motion(const led_motion_t *motion, TickType_t now)
+static bool advance_motion(led_motion_t *motion, TickType_t now)
 {
     TickType_t elapsed = now - motion->started_at;
     if (elapsed >= motion->duration_ticks) {
         set_duties(motion->target_duty[0], motion->target_duty[1]);
+        motion->active = false;
+        ESP_LOGD(TAG,
+                 "fade stopped: reason=completed duty=(%lu,%lu)",
+                 (unsigned long)motion->target_duty[0],
+                 (unsigned long)motion->target_duty[1]);
         return true;
     }
 
