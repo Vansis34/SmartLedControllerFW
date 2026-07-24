@@ -9,7 +9,6 @@
 #include "esp_check.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
 #include "freertos/task.h"
 
 typedef enum {
@@ -26,7 +25,6 @@ typedef struct {
 } led_motion_t;
 
 static const char *TAG = "LED";
-static QueueHandle_t s_state_queue;
 static TaskHandle_t s_worker_task;
 
 static const ledc_timer_config_t s_ledc_timer = {
@@ -289,34 +287,32 @@ static void led_worker(void *argument)
     (void)argument;
     app_state_snapshot_t state;
     led_motion_t motion = {0};
-    led_worker_phase_t phase;
+    led_worker_phase_t phase = LED_WORKER_IDLE;
+    bool state_ready = false;
     bool high_phase = true;
     TickType_t pause_deadline = 0;
 
-    ESP_ERROR_CHECK(AppState_Get(&state));
-    phase = apply_snapshot(&state, &high_phase, &motion);
-
     for (;;) {
-        app_state_snapshot_t incoming;
-        if (xQueueReceive(s_state_queue,
-                          &incoming,
-                          pdMS_TO_TICKS(APP_LED_WORKER_STEP_MS)) == pdPASS) {
+        const TickType_t wait_ticks =
+            state_ready ? pdMS_TO_TICKS(APP_LED_WORKER_STEP_MS)
+                        : portMAX_DELAY;
+
+        if (ulTaskNotifyTake(pdTRUE, wait_ticks) > 0U) {
             app_state_snapshot_t latest;
-            (void)incoming;
 
             /*
-             * Concurrent AppState callbacks may reach this overwrite queue out
-             * of revision order. Re-reading the central store turns the queued
-             * snapshot into a wake-up plus value copy and guarantees that an
-             * older callback cannot roll the LEDs back or hide a newer state.
+             * Notifications carry no state. Re-reading the central store means
+             * several rapid commits naturally coalesce into one application of
+             * the newest revision without an ordering race between callbacks.
              */
             if (AppState_Get(&latest) != ESP_OK) {
                 ESP_LOGE(TAG, "failed to refresh application state");
                 continue;
             }
-            if (latest.revision != state.revision) {
+            if (!state_ready || latest.revision != state.revision) {
                 state = latest;
                 phase = apply_snapshot(&state, &high_phase, &motion);
+                state_ready = true;
             }
             continue;
         }
@@ -345,36 +341,32 @@ static void led_worker(void *argument)
 }
 
 /**
- * @brief Forward the newest committed snapshot to the LED worker.
+ * @brief Wake the LED worker after a committed application state change.
  *
- * This callback runs in the task that changed AppState. xQueueOverwrite() is
- * non-blocking for the one-element queue: an unprocessed older snapshot is
- * intentionally replaced because PWM only needs the newest desired state.
+ * A direct-to-task notification carries no payload. Multiple changes may
+ * coalesce into one wake-up because the worker always reads the newest complete
+ * snapshot from AppState. The callback therefore remains short and non-blocking.
  *
- * @param snapshot Stable copy of the committed application state.
+ * @param snapshot Committed snapshot; intentionally unused by this listener.
  * @param changed_mask Fields changed by the commit (not needed by LED).
  * @param context Unused listener context.
  */
 static void state_listener(const app_state_snapshot_t *snapshot,
                            uint32_t changed_mask, void *context)
 {
+    (void)snapshot;
     (void)changed_mask;
     (void)context;
 
-    if (s_state_queue == NULL ||
-        xQueueOverwrite(s_state_queue, snapshot) != pdPASS) {
-        /*
-         * A valid one-element queue cannot normally reject overwrite. Logging
-         * exposes an internal lifecycle violation without blocking the task
-         * that applied AppState.
-         */
-        ESP_LOGE(TAG, "failed to forward state snapshot");
+    if (s_worker_task == NULL ||
+        xTaskNotifyGive(s_worker_task) != pdPASS) {
+        ESP_LOGE(TAG, "failed to notify LED worker");
     }
 }
 
 esp_err_t LED_Init(void)
 {
-    if (s_state_queue != NULL || s_worker_task != NULL) {
+    if (s_worker_task != NULL) {
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -385,12 +377,6 @@ esp_err_t LED_Init(void)
                             "failed to configure LEDC channel");
     }
 
-    s_state_queue = xQueueCreate(1, sizeof(app_state_snapshot_t));
-    if (s_state_queue == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    ESP_RETURN_ON_ERROR(AppState_Subscribe(state_listener, NULL), TAG,
-                        "failed to subscribe to state");
     if (xTaskCreate(led_worker,
                     "led_worker",
                     4096,
@@ -399,5 +385,25 @@ esp_err_t LED_Init(void)
                     &s_worker_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
+
+    const esp_err_t subscribe_result =
+        AppState_Subscribe(state_listener, NULL);
+    if (subscribe_result != ESP_OK) {
+        /*
+         * The worker is still waiting for its first notification, so it can be
+         * deleted safely if subscription cannot be established.
+         */
+        vTaskDelete(s_worker_task);
+        s_worker_task = NULL;
+        ESP_LOGE(TAG, "failed to subscribe to state: %s",
+                 esp_err_to_name(subscribe_result));
+        return subscribe_result;
+    }
+
+    /*
+     * The first notification closes the task-creation/subscription window and
+     * makes the worker fetch the newest state before starting any animation.
+     */
+    xTaskNotifyGive(s_worker_task);
     return ESP_OK;
 }
