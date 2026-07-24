@@ -1,245 +1,195 @@
 <!DOCTYPE html>
-<!-- saved from url=(0055)file:///F:/Downloads/deepseek_html_20251019_2e6f06.html -->
-<html lang="ru" style="font-size: 16px;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LED Controller WEB Interface</title>
+  <title>LED Controller</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: sans-serif;
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f3f4f6;
+      color: #202124;
     }
-
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: linear-gradient(270deg, rgba(249, 231, 155, 0.5), #db545a);
-      background-size: cover;
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px; }
+    .app {
+      max-width: 620px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px #0002;
+      overflow: hidden;
     }
-
-    .main-container {
-      width: 100%;
-      max-width: 600px;
-      padding: 20px;
-      background: #eee4e4;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .button {
-      display: block;
-      width: 100%;
-      padding: 15px;
-      font-size: 18px;
-      font-weight: bold;
-      border: none;
-      border-radius: 50px;
-      background-color: #db545a;
-      color: #eee4e4;
-      text-transform: uppercase;
-      cursor: pointer;
-      margin-top: 20px;
-      transition: all 0.3s ease;
-    }
-
-    .button:hover {
-      background-color: #c04a50;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    select {
-      width: 100%;
-      padding: 10px;
-      font-size: 18px;
-      margin-top: 10px;
-      background: none;
-      border: 5px solid #aaa;
-      border-radius: 8px;
-      font-weight: bold;
-      transition: all 0.3s ease;
-    }
-
-    select:focus {
-      border-color: #db545a;
-      outline: none;
-    }
-
-    h3 {
-      margin-top: 30px;
-      text-align: center;
-      color: #333;
-    }
-
-    /* Стили для слайдера */
-    .slider-container {
-      margin: 30px 0;
-      padding: 0 10px;
-    }
-
-    .slider-wrapper {
-      position: relative;
-      height: 10px;
-      background: #e0e0e0;
-      border-radius: 5px;
-      margin: 15px 0;
-    }
-
-    .slider-progress {
-      position: absolute;
-      height: 100%;
-      background: linear-gradient(to right, #db545a, #f9e79b);
-      border-radius: 5px;
-      width: 50%;
-      pointer-events: none;
-      transition: width 0.1s ease;
-    }
-
-    .slider {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      -webkit-appearance: none;
+    header { padding: 20px 24px 12px; }
+    h1 { margin: 0; font-size: 24px; }
+    .tabs { display: flex; border-bottom: 1px solid #ddd; padding: 0 16px; }
+    .tab {
+      flex: 1;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      padding: 14px 8px;
       background: transparent;
-      outline: none;
-      margin: 0;
-      z-index: 2;
-    }
-
-    .slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 25px;
-      height: 25px;
-      border-radius: 50%;
-      background: #fff;
       cursor: pointer;
-      border: 3px solid #db545a;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      position: relative;
-      z-index: 3;
-      transition: all 0.2s ease;
+      font-weight: 700;
     }
-
-    .slider::-moz-range-thumb {
-      width: 25px;
-      height: 25px;
-      border-radius: 50%;
-      background: #fff;
+    .tab.active { color: #b52f3b; border-color: #db545a; }
+    .panel { display: none; padding: 24px; }
+    .panel.active { display: block; }
+    .field { margin-bottom: 22px; }
+    label { display: block; margin-bottom: 8px; font-weight: 700; }
+    select, input[type="number"] {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+    }
+    input[type="range"] { width: 100%; accent-color: #db545a; }
+    .value { color: #b52f3b; }
+    .button {
+      width: 100%;
+      padding: 13px;
+      border: 0;
+      border-radius: 10px;
+      background: #db545a;
+      color: white;
       cursor: pointer;
-      border: 3px solid #db545a;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      font-size: 16px;
+      font-weight: 700;
     }
-
-    .slider::-webkit-slider-thumb:hover {
-      transform: scale(1.1);
-      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-    }
-
-    .value-display {
-      text-align: center;
-      font-size: 18px;
-      font-weight: bold;
-      color: #db545a;
-      margin-top: 10px;
-    }
-
-    /* Стили для скрытия элемента */
-    .hidden {
-      display: none;
-    }
-
-    @media (max-width: 600px) {
-      .main-container {
-        margin: 10px;
-      }
-      
-      h3 {
-        font-size: 20px;
-      }
-      
-      .button, select {
-        font-size: 16px;
-      }
-    }
+    .button.secondary { background: #555; margin-bottom: 22px; }
+    .button:disabled { opacity: .55; cursor: wait; }
+    .hint { margin: 8px 0 0; color: #666; font-size: 14px; }
+    .status { min-height: 22px; margin: 14px 0 0; text-align: center; }
+    .dirty { color: #9a5b00; }
+    .error { color: #b00020; }
+    .hidden { display: none; }
   </style>
-<style type="text/css" id="operaUserStyle"></style></head>
+</head>
 <body>
-  <button class="button" style="position: absolute;top: 20px;left: 50%;transform: translateX(-50%);width: 200px;z-index: 10;margin-top: 50px;padding-bottom: 15px;height: 65px;" id="lampButton">
-    Включить
-  </button>
-  <div class="main-container" style="
-    margin-left: 40px;
-    margin-right: 40px;
-    margin-top: 10px;
-">
-    <!-- Блок выбора опции -->
-    <select id="mode-select">
-      <option value="1">Постоянно</option>
-      <option value="2">Общий фейд</option>
-      <option value="3">Переменный фейд</option>
-      <option value="4">Мерцание</option>
-    </select>
+  <main class="app">
+    <header>
+      <h1>LED Controller</h1>
+    </header>
 
-    <!-- Блок слайдера яркости -->
-    <div class="slider-container">
-      <h3>Яркость:<span id="sliderValue">57</span>%</h3></div> 
-      <div class="slider-wrapper">
-        <div class="slider-progress" id="sliderProgress" style="width: 57%; transition: width 0.1s;"></div>
-        <input type="range" min="0" max="100" value="50" class="slider" id="BrightnessSlider">
-    </div>
-    <div class="slider-container" id="speedSliderContainer">
-      <h3>Скорость:<span id="speedSliderValue">32</span>%</h3>
-      <div class="slider-wrapper">
-        <div class="slider-progress" id="speedSliderProgress" style="width: 32%;"></div>
-        <input type="range" min="0" max="100" value="50" class="slider" id="SpeedSlider">
+    <nav class="tabs" aria-label="Разделы настроек">
+      <button class="tab active" data-panel="control">Управление</button>
+      <button class="tab" data-panel="profiles">Режимы</button>
+    </nav>
+
+    <section class="panel active" id="control">
+      <button class="button secondary" id="powerButton">Загрузка…</button>
+
+      <div class="field">
+        <label for="brightness">Яркость: <span class="value" id="brightnessValue">100</span>%</label>
+        <input id="brightness" type="range" min="0" max="100" value="100">
       </div>
+
+      <div class="field">
+        <label for="mode">Режим</label>
+        <select id="mode">
+          <option value="1">Горит постоянно</option>
+          <option value="2">Синхронное затухание</option>
+          <option value="3">Противофазное затухание</option>
+          <option value="4">Неполное противофазное затухание</option>
+        </select>
+        <p class="hint">Параметры выбранного режима находятся на вкладке «Режимы».</p>
+      </div>
+    </section>
+
+    <section class="panel" id="profiles">
+      <p class="hint" id="constantHint">У постоянного режима нет временного профиля.</p>
+      <div id="animatedFields">
+        <div class="field">
+          <label for="fadeMs">Время плавного перехода, мс</label>
+          <input id="fadeMs" type="number" min="100" max="30000" step="100">
+        </div>
+        <div class="field">
+          <label for="pauseMs">Пауза, мс</label>
+          <input id="pauseMs" type="number" min="0" max="30000" step="100">
+        </div>
+        <div class="field hidden" id="lowerField">
+          <label for="lowerBrightness">Нижняя яркость: <span class="value" id="lowerValue">15</span>%</label>
+          <input id="lowerBrightness" type="range" min="0" max="100" value="15">
+        </div>
+      </div>
+    </section>
+
+    <div style="padding: 0 24px 24px">
+      <button class="button" id="applyButton">Применить настройки</button>
+      <p class="status" id="status" role="status"></p>
     </div>
-    <button class="button" id="submit-btn">Применить параметры</button></div>
-
-    <!-- Блок слайдера скорости -->
-     
-      
-    
-
-    <!-- Кнопка отправки -->
-    
-  
+  </main>
 
   <script>
-    const modeSelect = document.getElementById("mode-select");
-    const brightnessSlider = document.getElementById("BrightnessSlider");
-    const sliderProgress = document.getElementById("sliderProgress");
-    const valueDisplay = document.getElementById("sliderValue");
-    const submitButton = document.getElementById("submit-btn");
-    const lampButton = document.getElementById("lampButton");
-    const speedSliderContainer = document.getElementById("speedSliderContainer");
+    const elements = {
+      power: document.getElementById("powerButton"),
+      brightness: document.getElementById("brightness"),
+      brightnessValue: document.getElementById("brightnessValue"),
+      mode: document.getElementById("mode"),
+      fadeMs: document.getElementById("fadeMs"),
+      pauseMs: document.getElementById("pauseMs"),
+      lower: document.getElementById("lowerBrightness"),
+      lowerValue: document.getElementById("lowerValue"),
+      lowerField: document.getElementById("lowerField"),
+      animatedFields: document.getElementById("animatedFields"),
+      constantHint: document.getElementById("constantHint"),
+      apply: document.getElementById("applyButton"),
+      status: document.getElementById("status")
+    };
 
-    let lampState = false;
-    let statusRequestRunning = false;
+    let confirmedPower = false;
+    let formDirty = false;
+    let refreshRunning = false;
+    let profiles = null;
 
-    /*
-     * Профили fade/pause ещё не представлены текущим HTTP API. Скрываем
-     * старый speed-контрол, чтобы интерфейс не обещал неподдерживаемую настройку.
-     */
-    speedSliderContainer.classList.add("hidden");
-
-    function updateBrightnessSlider() {
-      const percent =
-        Number(brightnessSlider.value) / Number(brightnessSlider.max) * 100;
-      sliderProgress.style.width = `${percent}%`;
-      valueDisplay.textContent = brightnessSlider.value;
+    function profileKey(mode) {
+      return {2: "fade", 3: "alternate", 4: "half_alternate"}[mode] || null;
     }
 
-    function applyServerState(state) {
-      lampState = Boolean(state.lamp);
-      lampButton.innerText =
-        lampState ? "Выключить лампу" : "Включить лампу";
-      brightnessSlider.value = state.brigh;
-      modeSelect.value = String(state.mode);
-      updateBrightnessSlider();
+    function showStatus(message, className = "") {
+      elements.status.textContent = message;
+      elements.status.className = `status ${className}`;
+    }
+
+    function updatePowerButton() {
+      elements.power.textContent = confirmedPower ? "Выключить" : "Включить";
+    }
+
+    function updateProfileFields() {
+      const mode = Number(elements.mode.value);
+      const key = profileKey(mode);
+      elements.constantHint.classList.toggle("hidden", Boolean(key));
+      elements.animatedFields.classList.toggle("hidden", !key);
+      elements.lowerField.classList.toggle("hidden", mode !== 4);
+      if (!key || !profiles) return;
+
+      const profile = profiles[key];
+      elements.fadeMs.value = profile.fade_ms;
+      elements.pauseMs.value = profile.pause_ms;
+      if (mode === 4) {
+        elements.lower.value = profile.lower_brightness;
+        elements.lowerValue.textContent = profile.lower_brightness;
+      }
+    }
+
+    function markDirty() {
+      formDirty = true;
+      showStatus("Есть неприменённые изменения", "dirty");
+    }
+
+    function saveVisibleProfileDraft() {
+      const mode = Number(elements.mode.value);
+      const key = profileKey(mode);
+      if (!key || !profiles) return;
+
+      profiles[key].fade_ms = Number(elements.fadeMs.value);
+      profiles[key].pause_ms = Number(elements.pauseMs.value);
+      if (mode === 4) {
+        profiles[key].lower_brightness = Number(elements.lower.value);
+      }
     }
 
     async function requestJson(url, options = {}) {
@@ -251,69 +201,124 @@
       return payload;
     }
 
-    async function refreshState() {
-      if (statusRequestRunning) {
-        return;
-      }
-
-      statusRequestRunning = true;
+    async function refreshState(forceFormUpdate = false) {
+      if (refreshRunning) return;
+      refreshRunning = true;
       try {
-        applyServerState(await requestJson("/status"));
+        const [state, serverProfiles] = await Promise.all([
+          requestJson("/api/state"),
+          requestJson("/api/profiles")
+        ]);
+        confirmedPower = state.power;
+        updatePowerButton();
+
+        if (!formDirty || forceFormUpdate) {
+          profiles = serverProfiles;
+          elements.brightness.value = state.brightness;
+          elements.brightnessValue.textContent = state.brightness;
+          elements.mode.value = String(state.mode);
+          updateProfileFields();
+          formDirty = false;
+          showStatus(`Состояние подтверждено, revision ${state.revision}`);
+        }
       } catch (error) {
-        console.error("Не удалось получить состояние:", error);
+        console.error("Не удалось обновить состояние:", error);
+        showStatus(`Ошибка связи: ${error.message}`, "error");
       } finally {
-        statusRequestRunning = false;
+        refreshRunning = false;
       }
     }
 
-    brightnessSlider.addEventListener("input", updateBrightnessSlider);
+    function buildSelectedProfile() {
+      const mode = Number(elements.mode.value);
+      if (mode === 1) return undefined;
 
-    submitButton.addEventListener("click", async () => {
-      submitButton.textContent = "Отправка...";
-      submitButton.disabled = true;
+      const profile = {
+        fade_ms: Number(elements.fadeMs.value),
+        pause_ms: Number(elements.pauseMs.value)
+      };
+      if (mode === 4) {
+        profile.lower_brightness = Number(elements.lower.value);
+      }
+      return profile;
+    }
 
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((item) =>
+          item.classList.toggle("active", item === tab));
+        document.querySelectorAll(".panel").forEach((panel) =>
+          panel.classList.toggle("active", panel.id === tab.dataset.panel));
+      });
+    });
+
+    elements.brightness.addEventListener("input", () => {
+      elements.brightnessValue.textContent = elements.brightness.value;
+      markDirty();
+    });
+    elements.mode.addEventListener("change", () => {
+      updateProfileFields();
+      markDirty();
+    });
+    [elements.fadeMs, elements.pauseMs].forEach((input) =>
+      input.addEventListener("input", () => {
+        saveVisibleProfileDraft();
+        markDirty();
+      }));
+    elements.lower.addEventListener("input", () => {
+      elements.lowerValue.textContent = elements.lower.value;
+      saveVisibleProfileDraft();
+      markDirty();
+    });
+
+    elements.power.addEventListener("click", async () => {
+      elements.power.disabled = true;
       try {
-        await requestJson("/led/settings", {
+        await requestJson("/api/state", {
           method: "PUT",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            brigh: Number(brightnessSlider.value),
-            mode: Number(modeSelect.value)
-          })
+          body: JSON.stringify({power: !confirmedPower})
         });
         await refreshState();
-        submitButton.textContent = "Настройки применены!";
       } catch (error) {
-        console.error("Не удалось применить настройки:", error);
-        submitButton.textContent = "Ошибка! Повторить";
+        showStatus(`Питание не изменено: ${error.message}`, "error");
       } finally {
-        window.setTimeout(() => {
-          submitButton.textContent = "Применить настройки";
-          submitButton.disabled = false;
-        }, 1500);
+        elements.power.disabled = false;
       }
     });
 
-    lampButton.addEventListener("click", async () => {
-      lampButton.disabled = true;
+    elements.apply.addEventListener("click", async () => {
+      elements.apply.disabled = true;
+      showStatus("Проверка и применение…");
+      const command = {
+        brightness: Number(elements.brightness.value),
+        mode: Number(elements.mode.value)
+      };
+      const profile = buildSelectedProfile();
+      if (profile) command.profile = profile;
+
       try {
-        await requestJson("/led/ctrl", {
+        await requestJson("/api/state", {
           method: "PUT",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({state: !lampState})
+          body: JSON.stringify(command)
         });
-        await refreshState();
+        /*
+         * A successful PUT means the server committed the candidate. Clearing
+         * dirty here also makes the next polling cycle authoritative if a
+         * concurrent refresh is already in progress.
+         */
+        formDirty = false;
+        await refreshState(true);
       } catch (error) {
-        console.error("Не удалось переключить лампу:", error);
+        showStatus(`Настройки не применены: ${error.message}`, "error");
       } finally {
-        lampButton.disabled = false;
+        elements.apply.disabled = false;
       }
     });
 
-    updateBrightnessSlider();
-    refreshState();
-
-    // Polling отражает на странице изменения от физической кнопки и MQTT.
-    window.setInterval(refreshState, 1000);
+    refreshState(true);
+    window.setInterval(() => refreshState(false), 1000);
   </script>
-</body></html>
+</body>
+</html>
