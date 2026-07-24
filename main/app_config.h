@@ -29,6 +29,7 @@
 
 /* Physical button timing. */
 #define APP_BUTTON_DEBOUNCE_MS               50U
+#define APP_BUTTON_POLL_MS                   10U
 #define APP_BUTTON_LONG_PRESS_MS             5000U
 
 /* Defaults and accepted ranges for the central application state. */
@@ -63,6 +64,9 @@ _Static_assert(APP_BUTTON_GPIO != APP_LED_CHANNEL_1_GPIO &&
                "Button GPIO must not overlap an LED channel");
 _Static_assert(APP_BUTTON_ACTIVE_LEVEL == 0 || APP_BUTTON_ACTIVE_LEVEL == 1,
                "Button active level must be 0 or 1");
+_Static_assert(APP_BUTTON_POLL_MS > 0U &&
+                   APP_BUTTON_POLL_MS <= APP_BUTTON_DEBOUNCE_MS,
+               "Button poll interval must fit inside debounce interval");
 _Static_assert(APP_LEDC_DUTY_RESOLUTION_BITS >= 1U &&
                    APP_LEDC_DUTY_RESOLUTION_BITS <= 20U,
                "LEDC duty resolution must be between 1 and 20 bits");

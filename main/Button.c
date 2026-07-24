@@ -11,6 +11,7 @@
 
 static const char *TAG = "BUTTON";
 static button_factory_reset_callback_t s_factory_reset;
+static TaskHandle_t s_button_task;
 
 /**
  * @brief Toggle only the runtime power field through the central store.
@@ -18,7 +19,9 @@ static button_factory_reset_callback_t s_factory_reset;
 static void toggle_power(void)
 {
     app_state_snapshot_t current;
-    if (AppState_Get(&current) != ESP_OK) {
+    esp_err_t error = AppState_Get(&current);
+    if (error != ESP_OK) {
+        ESP_LOGE(TAG, "failed to read state: %s", esp_err_to_name(error));
         return;
     }
 
@@ -26,7 +29,10 @@ static void toggle_power(void)
         .mask = APP_STATE_FIELD_POWER,
         .values.power = !current.power,
     };
-    ESP_ERROR_CHECK_WITHOUT_ABORT(AppState_Apply(&patch, NULL, NULL));
+    error = AppState_Apply(&patch, NULL, NULL);
+    if (error != ESP_OK) {
+        ESP_LOGE(TAG, "failed to toggle power: %s", esp_err_to_name(error));
+    }
 }
 
 /**
@@ -76,12 +82,22 @@ static void button_worker(void *argument)
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(APP_BUTTON_POLL_MS));
     }
 }
 
+/**
+ * @brief Configure GPIO13 and start the debounced active-high button worker.
+ * @param factory_reset Optional callback invoked once for each stable long press.
+ * @return ESP_OK, ESP_ERR_INVALID_STATE when already initialized, or a
+ *         GPIO/FreeRTOS resource error.
+ */
 esp_err_t Button_Init(button_factory_reset_callback_t factory_reset)
 {
+    if (s_button_task != NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
     s_factory_reset = factory_reset;
     const gpio_config_t config = {
         .pin_bit_mask = 1ULL << APP_BUTTON_GPIO,
@@ -94,7 +110,12 @@ esp_err_t Button_Init(button_factory_reset_callback_t factory_reset)
     if (error != ESP_OK) {
         return error;
     }
-    if (xTaskCreate(button_worker, "button", 3072, NULL, 5, NULL) != pdPASS) {
+    if (xTaskCreate(button_worker,
+                    "button",
+                    3072,
+                    NULL,
+                    5,
+                    &s_button_task) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
