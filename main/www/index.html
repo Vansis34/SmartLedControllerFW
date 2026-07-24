@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- saved from url=(0055)file:///F:/Downloads/deepseek_html_20251019_2e6f06.html -->
 <html lang="ru" style="font-size: 16px;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -145,6 +146,11 @@
       margin-top: 10px;
     }
 
+    /* Стили для скрытия элемента */
+    .hidden {
+      display: none;
+    }
+
     @media (max-width: 600px) {
       .main-container {
         margin: 10px;
@@ -171,129 +177,143 @@
 ">
     <!-- Блок выбора опции -->
     <select id="mode-select">
-      <option value=1>Постоянно</option>
-      <option value=2>Общий фейд</option>
-      <option value=3>Переменный фейд</option>
-      <option value=4>Мерцание</option>
+      <option value="1">Постоянно</option>
+      <option value="2">Общий фейд</option>
+      <option value="3">Переменный фейд</option>
+      <option value="4">Мерцание</option>
     </select>
 
-    <!-- Блок слайдера -->
+    <!-- Блок слайдера яркости -->
     <div class="slider-container">
-      <h3>Управление яркостью</h3>
+      <h3>Яркость:<span id="sliderValue">57</span>%</h3></div> 
       <div class="slider-wrapper">
-        <div class="slider-progress" id="sliderProgress" style="width: 50%;"></div>
-        <input type="range" min="0" max="100" value="50" class="slider" id="mySlider">
-      </div>
-      <div class="value-display">Текущее значение: <span id="sliderValue">50</span>%</div>
+        <div class="slider-progress" id="sliderProgress" style="width: 57%; transition: width 0.1s;"></div>
+        <input type="range" min="0" max="100" value="50" class="slider" id="BrightnessSlider">
     </div>
+    <div class="slider-container" id="speedSliderContainer">
+      <h3>Скорость:<span id="speedSliderValue">32</span>%</h3>
+      <div class="slider-wrapper">
+        <div class="slider-progress" id="speedSliderProgress" style="width: 32%;"></div>
+        <input type="range" min="0" max="100" value="50" class="slider" id="SpeedSlider">
+      </div>
+    </div>
+    <button class="button" id="submit-btn">Применить параметры</button></div>
+
+    <!-- Блок слайдера скорости -->
+     
+      
+    
 
     <!-- Кнопка отправки -->
-    <button class="button" id="submit-btn">Применить настройки</button>
-  </div>
+    
+  
 
   <script>
-    // Элементы DOM
     const modeSelect = document.getElementById("mode-select");
-    const slider = document.getElementById("mySlider");
+    const brightnessSlider = document.getElementById("BrightnessSlider");
     const sliderProgress = document.getElementById("sliderProgress");
     const valueDisplay = document.getElementById("sliderValue");
-    const submitBtn = document.getElementById("submit-btn");
+    const submitButton = document.getElementById("submit-btn");
+    const lampButton = document.getElementById("lampButton");
+    const speedSliderContainer = document.getElementById("speedSliderContainer");
 
-    // Инициализация слайдера
-    function updateSlider() {
-      const value = slider.value;
-      const max = slider.max;
-      const percent = (value / max) * 100;
-      
+    let lampState = false;
+    let statusRequestRunning = false;
+
+    /*
+     * Профили fade/pause ещё не представлены текущим HTTP API. Скрываем
+     * старый speed-контрол, чтобы интерфейс не обещал неподдерживаемую настройку.
+     */
+    speedSliderContainer.classList.add("hidden");
+
+    function updateBrightnessSlider() {
+      const percent =
+        Number(brightnessSlider.value) / Number(brightnessSlider.max) * 100;
       sliderProgress.style.width = `${percent}%`;
-      valueDisplay.textContent = value;
+      valueDisplay.textContent = brightnessSlider.value;
     }
 
-    // Обработчик изменения слайдера
-    slider.addEventListener('input', updateSlider);
-
-    // Инициализация при загрузке
-    updateSlider();
-
-    // Отправка данных на сервер
-    submitBtn.addEventListener('click', () => {
-      let selectedMode = Number(modeSelect.value);
-      let sliderValue = Number(slider.value);
-
-      // Визуальная обратная связь
-      submitBtn.textContent = "Отправка...";
-      submitBtn.disabled = true;
-
-      fetch('/led/settings', {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({ 
-          brigh: sliderValue,
-          mode: selectedMode
-        })
-      })
-      .then(response => {
-        if (!response.ok) throw new Error('Ошибка сети');
-        return response.text();
-      })
-      .then(data => {
-        console.log('Успех:', data);
-        submitBtn.textContent = "Настройки применены!";
-        setTimeout(() => {
-          submitBtn.textContent = "Применить настройки";
-          submitBtn.disabled = false;
-        }, 2000);
-      })
-      .catch(error => {
-        console.error('Ошибка:', error);
-        submitBtn.textContent = "Ошибка! Повторить";
-        submitBtn.disabled = false;
-      });
-    });
-
-    // Дополнительная анимация для улучшения UX
-    slider.addEventListener('mousedown', () => {
-      document.querySelector('.slider-progress').style.transition = 'none';
-    });
-
-    slider.addEventListener('mouseup', () => {
-      document.querySelector('.slider-progress').style.transition = 'width 0.1s ease';
-    });
-
-    let lampState = 0;
-    // Функция для загрузки состояния лампы с сервера
-    function updateLampState() {
-        fetch('/status')
-        .then(res => res.json())
-        .then(data => {
-            lampState = data.lamp; // Обновляем переменную
-            document.getElementById("lampButton").innerText = lampState ? "Выключить лампу" : "Включить лампу";
-            slider.value = data.brigh;
-            updateSlider();
-            modeSelect.value = String(data.mode)
-        })
-        .catch(err => console.error("Ошибка получения статуса:", err));
+    function applyServerState(state) {
+      lampState = Boolean(state.lamp);
+      lampButton.innerText =
+        lampState ? "Выключить лампу" : "Включить лампу";
+      brightnessSlider.value = state.brigh;
+      modeSelect.value = String(state.mode);
+      updateBrightnessSlider();
     }
-    
-    // При загрузке страницы сразу запрашиваем статус
-    document.addEventListener("DOMContentLoaded", updateLampState);
-    
-    // Обработчик нажатия кнопки
-    document.getElementById("lampButton").addEventListener("click", () => {
-        lampState = lampState ? 0 : 1;
-        console.log("lampState - " + lampState);
-        fetch('/led/ctrl', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state: lampState })
-        })
-        .then(() => {
-            document.getElementById("lampButton").innerText = lampState ? "Выключить лампу" : "Включить лампу";
-        })
-        .catch(err => console.error("Ошибка:", err));
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, options);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    async function refreshState() {
+      if (statusRequestRunning) {
+        return;
+      }
+
+      statusRequestRunning = true;
+      try {
+        applyServerState(await requestJson("/status"));
+      } catch (error) {
+        console.error("Не удалось получить состояние:", error);
+      } finally {
+        statusRequestRunning = false;
+      }
+    }
+
+    brightnessSlider.addEventListener("input", updateBrightnessSlider);
+
+    submitButton.addEventListener("click", async () => {
+      submitButton.textContent = "Отправка...";
+      submitButton.disabled = true;
+
+      try {
+        await requestJson("/led/settings", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            brigh: Number(brightnessSlider.value),
+            mode: Number(modeSelect.value)
+          })
+        });
+        await refreshState();
+        submitButton.textContent = "Настройки применены!";
+      } catch (error) {
+        console.error("Не удалось применить настройки:", error);
+        submitButton.textContent = "Ошибка! Повторить";
+      } finally {
+        window.setTimeout(() => {
+          submitButton.textContent = "Применить настройки";
+          submitButton.disabled = false;
+        }, 1500);
+      }
     });
-    </script>
+
+    lampButton.addEventListener("click", async () => {
+      lampButton.disabled = true;
+      try {
+        await requestJson("/led/ctrl", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({state: !lampState})
+        });
+        await refreshState();
+      } catch (error) {
+        console.error("Не удалось переключить лампу:", error);
+      } finally {
+        lampButton.disabled = false;
+      }
+    });
+
+    updateBrightnessSlider();
+    refreshState();
+
+    // Polling отражает на странице изменения от физической кнопки и MQTT.
+    window.setInterval(refreshState, 1000);
+  </script>
 </body></html>

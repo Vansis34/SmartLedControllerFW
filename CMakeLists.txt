@@ -2,7 +2,11 @@
 # in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
-set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/common_components/protocol_examples_common)
+# PlatformIO passes its own component directories to CMake. Append the shared
+# Espressif example component instead of overwriting that list, otherwise the
+# application component selected through `src_dir = main` may be lost.
+list(APPEND EXTRA_COMPONENT_DIRS
+    $ENV{IDF_PATH}/examples/common_components/protocol_examples_common)
 
 # if(${IDF_TARGET} STREQUAL "linux")
 #     list(APPEND EXTRA_COMPONENT_DIRS "$ENV{IDF_PATH}/tools/mocks/freertos/"
