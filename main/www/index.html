@@ -140,10 +140,15 @@
       status: document.getElementById("status")
     };
 
+<<<<<<< Updated upstream
     let confirmedPower = false;
     let formDirty = false;
     let refreshRunning = false;
     let profiles = null;
+=======
+    let lampState = false;
+    // let statusRequestRunning = false;
+>>>>>>> Stashed changes
 
     function profileKey(mode) {
       return {2: "fade", 3: "alternate", 4: "half_alternate"}[mode] || null;
@@ -201,6 +206,7 @@
       return payload;
     }
 
+<<<<<<< Updated upstream
     async function refreshState(forceFormUpdate = false) {
       if (refreshRunning) return;
       refreshRunning = true;
@@ -227,18 +233,60 @@
       } finally {
         refreshRunning = false;
       }
+=======
+    async function refreshState() {
+      // Отключено: автоматический GET статуса с контроллера.
+      // if (statusRequestRunning) {
+      //   return;
+      // }
+
+      // statusRequestRunning = true;
+      // try {
+      //   applyServerState(await requestJson("/status"));
+      // } catch (error) {
+      //   console.error("Не удалось получить состояние:", error);
+      // } finally {
+      //   statusRequestRunning = false;
+      // }
+>>>>>>> Stashed changes
     }
 
     function buildSelectedProfile() {
       const mode = Number(elements.mode.value);
       if (mode === 1) return undefined;
 
+<<<<<<< Updated upstream
       const profile = {
         fade_ms: Number(elements.fadeMs.value),
         pause_ms: Number(elements.pauseMs.value)
       };
       if (mode === 4) {
         profile.lower_brightness = Number(elements.lower.value);
+=======
+    submitButton.addEventListener("click", async () => {
+      submitButton.textContent = "Отправка...";
+      submitButton.disabled = true;
+
+      try {
+        await requestJson("/led/settings", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            brigh: Number(brightnessSlider.value),
+            mode: Number(modeSelect.value)
+          })
+        });
+        // await refreshState();
+        submitButton.textContent = "Настройки применены!";
+      } catch (error) {
+        console.error("Не удалось применить настройки:", error);
+        submitButton.textContent = "Ошибка! Повторить";
+      } finally {
+        window.setTimeout(() => {
+          submitButton.textContent = "Применить настройки";
+          submitButton.disabled = false;
+        }, 1500);
+>>>>>>> Stashed changes
       }
       return profile;
     }
@@ -279,7 +327,7 @@
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({power: !confirmedPower})
         });
-        await refreshState();
+        // await refreshState();
       } catch (error) {
         showStatus(`Питание не изменено: ${error.message}`, "error");
       } finally {
@@ -287,6 +335,7 @@
       }
     });
 
+<<<<<<< Updated upstream
     elements.apply.addEventListener("click", async () => {
       elements.apply.disabled = true;
       showStatus("Проверка и применение…");
@@ -319,6 +368,13 @@
 
     refreshState(true);
     window.setInterval(() => refreshState(false), 1000);
+=======
+    updateBrightnessSlider();
+    // refreshState();
+
+    // Polling отражает на странице изменения от физической кнопки и MQTT.
+    // window.setInterval(refreshState, 1000);
+>>>>>>> Stashed changes
   </script>
 </body>
 </html>

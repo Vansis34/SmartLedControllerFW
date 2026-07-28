@@ -221,7 +221,7 @@ esp_err_t AppState_Apply(const app_state_patch_t *patch,
     }
     xSemaphoreGive(s_state_mutex);
 
-    ESP_LOGD(TAG,
+    ESP_LOGI(TAG,
              "candidate validated: requested=0x%02lx changed=0x%02lx "
              "revision=%lu",
              (unsigned long)patch->mask,

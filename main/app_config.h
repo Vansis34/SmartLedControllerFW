@@ -12,9 +12,9 @@
  */
 
 /* Physical board wiring. */
-#define APP_LED_CHANNEL_1_GPIO               14
-#define APP_LED_CHANNEL_2_GPIO               12
-#define APP_BUTTON_GPIO                      13
+#define APP_LED_CHANNEL_1_GPIO               18
+#define APP_LED_CHANNEL_2_GPIO               19
+#define APP_BUTTON_GPIO                      21
 #define APP_BUTTON_ACTIVE_LEVEL              1
 
 /* PWM configuration for the two HV9910B control inputs. */
