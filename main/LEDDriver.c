@@ -74,10 +74,19 @@ static uint32_t percent_to_duty(uint8_t percent)
  */
 static void set_duties(uint32_t duty_1, uint32_t duty_2)
 {
-    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty_and_update(
-        s_channels[0].speed_mode, s_channels[0].channel, duty_1, 0));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty_and_update(
-        s_channels[1].speed_mode, s_channels[1].channel, duty_2, 0));
+    // ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty_and_update(
+    //     s_channels[0].speed_mode, s_channels[0].channel, duty_1, 0)); // нужен fade модуль, иначе не работает
+    // ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty_and_update(
+    //     s_channels[1].speed_mode, s_channels[1].channel, duty_2, 0));
+
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty(
+        s_channels[0].speed_mode, s_channels[0].channel, duty_1));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_update_duty(
+        s_channels[0].speed_mode, s_channels[0].channel));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_set_duty(
+        s_channels[1].speed_mode, s_channels[1].channel, duty_2));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ledc_update_duty(
+        s_channels[1].speed_mode, s_channels[1].channel));
 }
 
 /**
@@ -91,7 +100,7 @@ static void begin_motion(led_motion_t *motion, uint32_t target_1,
                          uint32_t target_2, uint32_t duration_ms)
 {
     if (motion->active) {
-        ESP_LOGD(TAG, "fade stopped: reason=superseded");
+        ESP_LOGI(TAG, "fade stopped: reason=superseded");
     }
 
     motion->start_duty[0] = ledc_get_duty(s_channels[0].speed_mode,
@@ -107,13 +116,13 @@ static void begin_motion(led_motion_t *motion, uint32_t target_1,
     }
     motion->active = true;
 
-    ESP_LOGD(TAG,
-             "fade started: duty=(%lu,%lu)->(%lu,%lu) duration_ms=%lu",
-             (unsigned long)motion->start_duty[0],
-             (unsigned long)motion->start_duty[1],
-             (unsigned long)motion->target_duty[0],
-             (unsigned long)motion->target_duty[1],
-             (unsigned long)duration_ms);
+    ESP_LOGI(TAG,
+         "fade started: duty=(%lu,%lu)->(%lu,%lu) duration_ms=%lu",
+         (unsigned long)motion->start_duty[0],
+         (unsigned long)motion->start_duty[1],
+         (unsigned long)motion->target_duty[0],
+         (unsigned long)motion->target_duty[1],
+         (unsigned long)duration_ms);
 }
 
 /**
@@ -128,7 +137,7 @@ static bool advance_motion(led_motion_t *motion, TickType_t now)
     if (elapsed >= motion->duration_ticks) {
         set_duties(motion->target_duty[0], motion->target_duty[1]);
         motion->active = false;
-        ESP_LOGD(TAG,
+        ESP_LOGI(TAG,
                  "fade stopped: reason=completed duty=(%lu,%lu)",
                  (unsigned long)motion->target_duty[0],
                  (unsigned long)motion->target_duty[1]);
